@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CommerceGov WebMCP</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">CommerceGov WebMCP</p>
+      <h1>Give AI agents permission to propose,<br>not permission to produce.</h1>
+      <p class="intro">A bounded-authority browser skeleton for governed commerce changes.</p>
+      <section class="product-card" aria-labelledby="product-heading">
+        <div>
+          <p class="label">Selected product</p>
+          <h2 id="product-heading" data-product-title>Loading product…</h2>
+          <p class="muted">ID <span data-product-id>—</span></p>
+        </div>
+        <div class="stage"><p class="label">Governance stage</p><strong data-stage>—</strong></div>
+      </section>
+      <section class="authority-grid" aria-label="Authority boundary">
+        <article class="agent"><p class="label">Agent authority</p><strong>READ / ANALYZE / PROPOSE</strong><p>Can inspect context and create a Review proposal.</p></article>
+        <article class="human"><p class="label">Production authority</p><strong>HUMAN CONTROLLED</strong><p>Approval required · Apply required</p></article>
+      </section>
+      <section class="proposal" aria-live="polite">
+        <p class="label">Proposal status</p>
+        <p data-proposal-status>No proposal exists in this browser session.</p>
+        <button type="button" data-create-proposal>Create demonstration proposal</button>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
