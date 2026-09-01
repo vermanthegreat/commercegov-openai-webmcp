@@ -14,7 +14,9 @@ CommerceGov:
 REVIEW + APPROVE + APPLY + VERIFY
 ```
 
-This initial milestone uses deterministic mock CommerceGov data. Wiring the real CommerceGov Integration API is a later milestone.
+The server adapter supports an explicit deterministic mock mode and a real
+CommerceGov Integration API mode. Browser code and the five WebMCP tools use the
+same normalized local boundary in either mode.
 
 ## Commands
 
@@ -24,6 +26,12 @@ npm start
 npm test
 npm run check
 ```
+
+Copy `.env.example` into your local environment and set `COMMERCEGOV_MODE` to
+`mock` for deterministic development or `real` for the Integration API. Real
+mode requires the API URL, OAuth access token, expected agency id, and canonical
+shop domain. Invalid real configuration fails closed and never falls back to the
+mock.
 
 ## Public WebMCP tools
 

@@ -34,31 +34,31 @@ export const app = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const match = (pattern) => url.pathname.match(pattern);
-    if (req.method === 'GET' && url.pathname === '/api/products') return json(res, 200, client.searchProducts({ query: url.searchParams.get('query') ?? '', limit: url.searchParams.get('limit') ?? 10 }));
+    if (req.method === 'GET' && url.pathname === '/api/products') return json(res, 200, await client.searchProducts({ query: url.searchParams.get('query') ?? '', limit: url.searchParams.get('limit') ?? 10 }));
     let route = match(/^\/api\/products\/([^/]+)\/context$/);
     if (req.method === 'GET' && route) {
-      const value = client.getGovernanceContext(route[1]);
+      const value = await client.getGovernanceContext(route[1]);
       return json(res, value ? 200 : 404, value ?? { error: 'Product not found' });
     }
     route = match(/^\/api\/products\/([^/]+)\/proposals$/);
     if (req.method === 'POST' && route) {
-      const value = client.createProposal(route[1], await body(req));
-      return json(res, value ? 201 : 404, value ? { proposal_id: value.proposal_id, stage: value.stage, review_state: value.review_state, policy_result: value.policy_result } : { error: 'Product not found' });
+      const value = await client.proposeChange(route[1], await body(req));
+      return json(res, 201, value);
     }
     route = match(/^\/api\/proposals\/([^/]+)\/audit$/);
     if (req.method === 'GET' && route) {
-      const value = client.getAuditEvidence(route[1]);
+      const value = await client.getAuditEvidence(route[1]);
       return json(res, value ? 200 : 404, value ?? { error: 'Proposal not found' });
     }
     route = match(/^\/api\/proposals\/([^/]+)$/);
     if (req.method === 'GET' && route) {
-      const value = client.getProposalStatus(route[1]);
+      const value = await client.getChangeStatus(route[1]);
       return json(res, value ? 200 : 404, value ?? { error: 'Proposal not found' });
     }
     if (req.method === 'GET' && await staticFile(res, url.pathname)) return;
     json(res, 404, { error: 'Not found' });
   } catch (error) {
-    json(res, 400, { error: error.message });
+    json(res, Number.isInteger(error.status) ? error.status : 400, { error: error.message, code: error.code || 'request_failed' });
   }
 });
 
