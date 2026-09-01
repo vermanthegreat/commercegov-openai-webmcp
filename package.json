@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "build:site": "node scripts/build-site.mjs",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/commercegov/api.js && node --check src/commercegov/client.js && node --check src/commercegov/contracts.js && node --check src/commercegov/mock.js && node --check src/public/app.js && node --check src/public/webmcp.js"
+    "check": "node --check src/server.js && node --check src/site-worker.js && node --check src/commercegov/api.js && node --check src/commercegov/client.js && node --check src/commercegov/contracts.js && node --check src/commercegov/mock.js && node --check src/public/app.js && node --check src/public/webmcp.js"
   }
 }
