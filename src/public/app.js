@@ -5,10 +5,14 @@ const productId = document.querySelector('[data-product-id]');
 const stage = document.querySelector('[data-stage]');
 const proposalStatus = document.querySelector('[data-proposal-status]');
 const createProposalButton = document.querySelector('[data-create-proposal]');
+const webmcpStatus = document.querySelector('[data-webmcp-status]');
+const backendStatus = document.querySelector('[data-backend-status]');
+const sandboxNotice = document.querySelector('[data-sandbox-notice]');
+const activityList = document.querySelector('[data-activity]');
 
 async function request(path, options) {
   const response = await fetch(path, options);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+  if (!response.ok) throw new Error('Request could not be completed');
   return response.json();
 }
 
@@ -20,7 +24,7 @@ async function load() {
     productId.textContent = product.product_id;
     stage.textContent = product.stage;
   } catch {
-    productTitle.textContent = 'Unable to load mock product';
+    productTitle.textContent = 'Unable to load governed product';
   }
 }
 
@@ -33,9 +37,29 @@ createProposalButton.addEventListener('click', async () => {
     });
     proposalStatus.textContent = `Proposal ${proposal.proposal_id}: ${proposal.stage} (${proposal.review_state}). Human approval and apply are still required.`;
   } catch {
-    proposalStatus.textContent = 'Could not create proposal.';
+    proposalStatus.textContent = 'Could not create the manual review proposal.';
   }
 });
 
+document.addEventListener('commercegov:webmcp-status', (event) => {
+  webmcpStatus.textContent = event.detail.ready ? 'WebMCP READY' : 'WebMCP UNAVAILABLE';
+});
+document.addEventListener('commercegov:webmcp-activity', (event) => {
+  const item = document.createElement('li');
+  item.textContent = event.detail.name;
+  if (activityList.firstElementChild?.textContent === 'Waiting for an agent tool call.') activityList.replaceChildren();
+  activityList.append(item);
+});
+
+async function loadHealth() {
+  try {
+    const health = await request('/health');
+    const sandbox = health.mode === 'judge_sandbox';
+    backendStatus.textContent = sandbox ? 'JUDGE SANDBOX — READY' : health.mode === 'real' && health.backend !== 'ready' ? 'REAL INTEGRATION — DEGRADED' : `${String(health.mode).toUpperCase()} — READY`;
+    sandboxNotice.hidden = !sandbox;
+  } catch { backendStatus.textContent = 'BACKEND — DEGRADED'; }
+}
+
 load();
-registerWebMCPTools();
+loadHealth();
+registerWebMCPTools().then((ready) => { if (!ready) webmcpStatus.textContent = 'WebMCP UNAVAILABLE'; });

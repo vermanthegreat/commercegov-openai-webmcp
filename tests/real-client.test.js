@@ -49,7 +49,7 @@ test('real client maps all five capabilities and keeps auth server-side', async 
   const proposal = await client.proposeChange('42', { changes: { title: 'Blue Board' }, idempotency_key: 'proposal-001' });
   assert.equal(proposal.proposal_id, '7');
   assert.equal(proposal.next_required_authority, 'human_review');
-  assert.equal(proposal.mutation_class, 'product_content_proposal');
+  assert.equal(proposal.production_changed, false);
   assert.deepEqual(await client.getChangeStatus('7'), { proposal_id: '7', state: 'review_pending' });
   assert.equal((await client.getAuditEvidence('7')).returned_count, 1);
   assert.ok(calls.every(({ options }) => options.headers.authorization === 'Bearer server-secret'));

@@ -2,7 +2,8 @@ import {
   CommerceGovContractError,
   assertBinding,
   assertCommerceGovClient,
-  assertProposeOnlyPayload
+  assertProposeOnlyPayload,
+  authorityProjection
 } from './contracts.js';
 
 const MAX_SEARCH_PAGES = 10;
@@ -60,6 +61,17 @@ function ensureEcho(actual, expected, field) {
   }
 }
 
+function upstreamFailure(status, payload) {
+  const upstreamCode = String(payload?.error?.code || '');
+  if (status === 404) return new CommerceGovApiError('not_found', 'CommerceGov resource was not found', { status: 404 });
+  if (status === 409 && upstreamCode === 'binding_mismatch') return new CommerceGovApiError('binding_mismatch', 'CommerceGov binding mismatch', { status: 409 });
+  if (status === 409) return new CommerceGovApiError('idempotency_conflict', 'CommerceGov rejected an idempotency conflict', { status: 409 });
+  if (status === 400 || status === 422) return new CommerceGovApiError('invalid_input', 'CommerceGov rejected the request input', { status });
+  if (status === 403) return new CommerceGovApiError('forbidden_action', 'CommerceGov rejected the requested action', { status: 403 });
+  if (status === 502) return new CommerceGovApiError('invalid_backend_response', 'CommerceGov returned an invalid response', { status: 502 });
+  return new CommerceGovApiError('backend_unavailable', 'CommerceGov backend request failed', { status: status >= 500 ? status : 503, retryable: status >= 500 });
+}
+
 export function createCommerceGovApi({ baseUrl, token, agency, shop, timeoutMs = 5000, fetchImpl = globalThis.fetch } = {}) {
   const binding = Object.freeze({ agency: required(agency, 'COMMERCEGOV_AGENCY_ID'), shop: normalizeShop(shop) });
   const apiUrl = normalizeBaseUrl(baseUrl);
@@ -98,17 +110,7 @@ export function createCommerceGovApi({ baseUrl, token, agency, shop, timeoutMs =
       throw new CommerceGovApiError('invalid_response', 'CommerceGov returned invalid JSON', { status: 502 });
     }
     if (!response.ok) {
-      const error = payload?.error ?? {};
-      throw new CommerceGovApiError(
-        String(error.code || 'upstream_error'),
-        String(error.message || 'CommerceGov request failed'),
-        {
-          status: response.status,
-          retryable: Boolean(error.retryable),
-          requestId: error.request_id || null,
-          retryAfterSeconds: error.retry_after_seconds ?? null
-        }
-      );
+      throw upstreamFailure(response.status, payload);
     }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       throw new CommerceGovApiError('invalid_response', 'CommerceGov returned an invalid response', { status: 502 });
@@ -159,6 +161,7 @@ export function createCommerceGovApi({ baseUrl, token, agency, shop, timeoutMs =
           controlled_fields: [...policy.controlled_fields],
           ...policy.rules
         },
+        ...authorityProjection(binding),
         authority: { agent: ['read', 'analyze', 'propose'], approve: 'human_required', apply: 'human_required' }
       };
     },
@@ -174,15 +177,15 @@ export function createCommerceGovApi({ baseUrl, token, agency, shop, timeoutMs =
         throw new CommerceGovApiError('authority_violation', 'CommerceGov did not return a review-only proposal', { status: 502 });
       }
       return {
-        ...result,
-        change_id: String(result.proposal_id),
-        status: result.stage,
-        agency: binding.agency,
-        shop: binding.shop,
-        target: { type: 'product', product_id: product },
-        mutation_class: 'product_content_proposal',
-        proposed_value: proposal.changes,
-        next_required_authority: 'human_review'
+        created: true,
+        proposal_id: String(result.proposal_id),
+        product_id: product,
+        stage: 'review',
+        review_state: 'Review/pending',
+        policy_result: result.policy_result && typeof result.policy_result === 'object' ? result.policy_result : {},
+        idempotent_replay: Boolean(result.idempotent_replay),
+        next_required_authority: 'human_review',
+        production_changed: false
       };
     },
 

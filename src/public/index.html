@@ -10,7 +10,9 @@
     <main>
       <p class="eyebrow">CommerceGov WebMCP</p>
       <h1>Give AI agents permission to propose,<br>not permission to produce.</h1>
-      <p class="intro">A bounded-authority browser skeleton for governed commerce changes.</p>
+      <p class="intro">A bounded-authority console for governed commerce changes.</p>
+      <section class="status-row" aria-label="System status"><strong data-webmcp-status>WebMCP CHECKING</strong><strong data-backend-status>BACKEND CHECKING</strong></section>
+      <p class="muted" data-sandbox-notice hidden>Deterministic judge sandbox — not production</p>
       <section class="product-card" aria-labelledby="product-heading">
         <div>
           <p class="label">Selected product</p>
@@ -26,8 +28,11 @@
       <section class="proposal" aria-live="polite">
         <p class="label">Proposal status</p>
         <p data-proposal-status>No proposal exists in this browser session.</p>
-        <button type="button" data-create-proposal>Create demonstration proposal</button>
+        <button type="button" data-create-proposal>Create manual review proposal</button>
+        <p class="muted">Manual browser action — not WebMCP agent activity.</p>
       </section>
+      <section class="proposal" aria-live="polite"><p class="label">WebMCP activity</p><ol data-activity><li>Waiting for an agent tool call.</li></ol></section>
+      <p class="production">PRODUCTION — No Shopify write performed</p>
     </main>
     <script type="module" src="/app.js"></script>
   </body>

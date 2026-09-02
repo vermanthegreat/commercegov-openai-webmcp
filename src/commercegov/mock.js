@@ -1,4 +1,4 @@
-import { CommerceGovContractError, assertBinding, assertProposeOnlyPayload } from './contracts.js';
+import { CommerceGovContractError, assertBinding, assertProposeOnlyPayload, authorityProjection } from './contracts.js';
 
 const PRODUCT = Object.freeze({
   product_id: '7638071377991',
@@ -11,6 +11,11 @@ export function createMockCommerceGov({ agency = 'demo-agency', shop = 'demo.mys
   const idempotencyKeys = new Map();
   let nextProposalId = 1;
   const binding = Object.freeze({ agency, shop });
+
+  function idempotencyIdentity(productId, changes) {
+    const normalizedChanges = Object.fromEntries(Object.entries(changes).sort(([left], [right]) => left.localeCompare(right)));
+    return JSON.stringify({ agency, shop, product_id: productId, changes: normalizedChanges });
+  }
 
   function findProduct(productId) {
     return productId === PRODUCT.product_id ? PRODUCT : null;
@@ -41,11 +46,8 @@ export function createMockCommerceGov({ agency = 'demo-agency', shop = 'demo.mys
           seo_constraints: { keyword_coverage: 'recommended' },
           proposal_instructions: 'Submit for human review.'
         },
-        authority: {
-          agent: ['read', 'analyze', 'propose'],
-          approve: 'human_required',
-          apply: 'human_required'
-        }
+        ...authorityProjection(binding),
+        authority: { agent: ['read', 'analyze', 'propose'], approve: 'human_required', apply: 'human_required' }
       };
     },
 
@@ -53,10 +55,16 @@ export function createMockCommerceGov({ agency = 'demo-agency', shop = 'demo.mys
       assertBinding(binding, payload);
       const { changes, idempotency_key: idempotencyKey } = assertProposeOnlyPayload(payload);
       if (!findProduct(productId)) throw new CommerceGovContractError('product_not_found', 'Product not found', { status: 404 });
-      if (idempotencyKey && idempotencyKeys.has(idempotencyKey)) {
-        return idempotencyKeys.get(idempotencyKey);
+      const scopedKey = `${agency}\u0000${shop}\u0000${idempotencyKey}`;
+      const requestIdentity = idempotencyIdentity(productId, changes);
+      if (idempotencyKeys.has(scopedKey)) {
+        const replay = idempotencyKeys.get(scopedKey);
+        if (replay.request_identity !== requestIdentity) {
+          throw new CommerceGovContractError('idempotency_conflict', 'Idempotency key was already used for a different proposal request', { status: 409 });
+        }
+        return { created: true, proposal_id: replay.proposal_id, product_id: replay.product_id, stage: 'review', review_state: 'Review/pending', policy_result: replay.policy_result, idempotent_replay: true, next_required_authority: 'human_review', production_changed: false };
       }
-      const proposal = {
+      const storedProposal = {
         proposal_id: String(nextProposalId++),
         stage: 'review',
         review_state: 'Review/pending',
@@ -69,11 +77,24 @@ export function createMockCommerceGov({ agency = 'demo-agency', shop = 'demo.mys
         target: { type: 'product', product_id: productId },
         mutation_class: 'product_content_proposal',
         proposed_value: changes,
-        next_required_authority: 'human_review'
+        next_required_authority: 'human_review',
+        production_changed: false,
+        idempotent_replay: false
       };
-      proposals.set(proposal.proposal_id, proposal);
-      if (idempotencyKey) idempotencyKeys.set(idempotencyKey, proposal);
-      return proposal;
+      storedProposal.request_identity = requestIdentity;
+      proposals.set(storedProposal.proposal_id, storedProposal);
+      idempotencyKeys.set(scopedKey, storedProposal);
+      return {
+        created: true,
+        proposal_id: storedProposal.proposal_id,
+        product_id: storedProposal.product_id,
+        stage: 'review',
+        review_state: 'Review/pending',
+        policy_result: storedProposal.policy_result,
+        idempotent_replay: false,
+        next_required_authority: 'human_review',
+        production_changed: false
+      };
     },
 
     async getChangeStatus(proposalId, requestedBinding = {}) {

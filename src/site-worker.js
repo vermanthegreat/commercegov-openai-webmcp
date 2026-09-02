@@ -1,4 +1,5 @@
 import { createCommerceGovClient } from './commercegov/client.js';
+import { WEBMCP_TOOL_COUNT, normalizePublicError } from './commercegov/contracts.js';
 
 function json(status, data) {
   return new Response(JSON.stringify(data), {
@@ -18,12 +19,32 @@ function staticResponse(file) {
 }
 
 export function createSiteWorker(staticFiles) {
+  const sandboxClients = new Map();
+
+  function clientFor(env, mode) {
+    if (!['mock', 'dev', 'development', 'judge_sandbox'].includes(mode)) {
+      return createCommerceGovClient({ env, fetchImpl: globalThis.fetch });
+    }
+    const scope = JSON.stringify([
+      mode,
+      String(env.COMMERCEGOV_AGENCY_ID || 'demo-agency'),
+      String(env.COMMERCEGOV_SHOP || 'demo.myshopify.com')
+    ]);
+    if (!sandboxClients.has(scope)) sandboxClients.set(scope, createCommerceGovClient({ env, fetchImpl: globalThis.fetch }));
+    return sandboxClients.get(scope);
+  }
+
   return {
     async fetch(request, env) {
       try {
-        const client = createCommerceGovClient({ env, fetchImpl: globalThis.fetch });
         const url = new URL(request.url);
         const match = (pattern) => url.pathname.match(pattern);
+        const mode = String(env.COMMERCEGOV_MODE ?? '').trim().toLowerCase();
+        const client = clientFor(env, mode);
+
+        if (request.method === 'GET' && url.pathname === '/health') {
+          return json(200, { status: 'ok', mode, webmcp_tools: WEBMCP_TOOL_COUNT, backend: mode === 'real' ? 'degraded' : 'ready' });
+        }
 
         if (request.method === 'GET' && url.pathname === '/api/products') {
           return json(200, await client.searchProducts({
@@ -61,10 +82,8 @@ export function createSiteWorker(staticFiles) {
         }
         return json(404, { error: 'Not found' });
       } catch (error) {
-        return json(Number.isInteger(error.status) ? error.status : 400, {
-          error: error.message,
-          code: error.code || 'request_failed'
-        });
+        const safe = normalizePublicError(error);
+        return json(Number.isInteger(error.status) ? error.status : 500, safe);
       }
     }
   };

@@ -4,7 +4,7 @@ import { assertCommerceGovClient } from './contracts.js';
 
 export function createCommerceGovClient({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
   const mode = String(env.COMMERCEGOV_MODE ?? '').trim().toLowerCase();
-  if (['mock', 'dev', 'development'].includes(mode)) {
+  if (['mock', 'dev', 'development', 'judge_sandbox'].includes(mode)) {
     return assertCommerceGovClient(createMockCommerceGov({
       agency: String(env.COMMERCEGOV_AGENCY_ID || 'demo-agency'),
       shop: String(env.COMMERCEGOV_SHOP || 'demo.myshopify.com')
@@ -20,5 +20,5 @@ export function createCommerceGovClient({ env = process.env, fetchImpl = globalT
       fetchImpl
     });
   }
-  throw new CommerceGovApiError('configuration_error', 'COMMERCEGOV_MODE must explicitly be mock, dev, development, or real', { status: 500 });
+  throw new CommerceGovApiError('configuration_error', 'COMMERCEGOV_MODE must explicitly be mock, dev, development, judge_sandbox, or real', { status: 500 });
 }

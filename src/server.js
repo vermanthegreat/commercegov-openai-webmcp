@@ -3,9 +3,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCommerceGovClient } from './commercegov/client.js';
+import { WEBMCP_TOOL_COUNT, normalizePublicError } from './commercegov/contracts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const client = createCommerceGovClient();
+const mode = String(process.env.COMMERCEGOV_MODE).trim().toLowerCase();
+const health = () => ({ status: 'ok', mode, webmcp_tools: WEBMCP_TOOL_COUNT, backend: mode === 'real' ? 'degraded' : 'ready' });
 
 function json(res, status, data) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
@@ -29,11 +32,11 @@ async function staticFile(res, pathname) {
   return true;
 }
 
-// These are local skeleton/BFF routes, not canonical CommerceGov production API routes.
 export const app = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const match = (pattern) => url.pathname.match(pattern);
+    if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, health());
     if (req.method === 'GET' && url.pathname === '/api/products') return json(res, 200, await client.searchProducts({ query: url.searchParams.get('query') ?? '', limit: url.searchParams.get('limit') ?? 10 }));
     let route = match(/^\/api\/products\/([^/]+)\/context$/);
     if (req.method === 'GET' && route) {
@@ -58,11 +61,12 @@ export const app = createServer(async (req, res) => {
     if (req.method === 'GET' && await staticFile(res, url.pathname)) return;
     json(res, 404, { error: 'Not found' });
   } catch (error) {
-    json(res, Number.isInteger(error.status) ? error.status : 400, { error: error.message, code: error.code || 'request_failed' });
+    const safe = normalizePublicError(error);
+    json(res, Number.isInteger(error.status) ? error.status : 500, safe);
   }
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, () => console.log(`CommerceGov WebMCP skeleton listening on http://localhost:${port}`));
+  app.listen(port, () => console.log(`CommerceGov WebMCP listening on http://localhost:${port}`));
 }

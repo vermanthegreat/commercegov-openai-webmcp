@@ -36,6 +36,42 @@ export const FORBIDDEN_TOOL_TERMS = Object.freeze([
   'approve', 'apply', 'rollback', 'publish', 'shopify_write', 'change_policy', 'change_role'
 ]);
 
+export const WEBMCP_TOOL_COUNT = PUBLIC_WEBMCP_TOOLS.length;
+
+const PUBLIC_ERROR_MESSAGES = Object.freeze({
+  invalid_input: 'The request input is invalid.',
+  forbidden_action: 'The requested action is not permitted.',
+  not_found: 'The requested governed resource was not found.',
+  binding_mismatch: 'The request does not match the configured authority scope.',
+  backend_unavailable: 'CommerceGov backend request failed.',
+  invalid_backend_response: 'CommerceGov returned an invalid response.',
+  cancelled: 'The request was cancelled.',
+  idempotency_conflict: 'The idempotency key was already used for a different proposal request.'
+});
+
+export function normalizePublicError(error = {}) {
+  const rawCode = String(error.code || '');
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  let code;
+  if (rawCode === 'forbidden_action') code = 'forbidden_action';
+  else if (rawCode === 'binding_mismatch') code = 'binding_mismatch';
+  else if (rawCode === 'cancelled') code = 'cancelled';
+  else if (rawCode === 'idempotency_conflict') code = 'idempotency_conflict';
+  else if (rawCode === 'not_found' || rawCode.endsWith('_not_found') || status === 404) code = 'not_found';
+  else if (rawCode === 'invalid_response' || rawCode === 'invalid_backend_response' || rawCode === 'authority_violation' || status === 502) code = 'invalid_backend_response';
+  else if (rawCode === 'timeout' || rawCode === 'transport_error' || rawCode === 'backend_unavailable' || rawCode === 'configuration_error' || status >= 500) code = 'backend_unavailable';
+  else code = 'invalid_input';
+  return { code, message: PUBLIC_ERROR_MESSAGES[code] };
+}
+
+export function authorityProjection({ agency, shop }) {
+  return {
+    authority_scope: { agency_id: String(agency), shop: String(shop) },
+    agent_authority: { search: true, inspect: true, propose: true, approve: false, apply: false, write_shopify: false },
+    required_human_authority: { approve: 'human', apply: 'human' }
+  };
+}
+
 export class CommerceGovContractError extends Error {
   constructor(code, message, { status = 422 } = {}) {
     super(message);
